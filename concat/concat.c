@@ -12,6 +12,11 @@
 
 // active-low: low-Pegel (logisch 0; GND am Pin) → LED leuchtet
 
+
+inline void get_tile(uint8_t *page, uint8_t *col, uint8_t bit, uint8_t i){
+    *page = (i * 8 * TILE_SIZE + bit * TILE_SIZE)/(BOARD_WIDTH * TILE_SIZE);
+    *col =  (i * 8 * TILE_SIZE + bit * TILE_SIZE)%(BOARD_WIDTH * TILE_SIZE);
+}
 void main(void){
     sei();
 
@@ -39,9 +44,10 @@ void main(void){
     */
     for(uint8_t i = 0; i < sizeof(board); ++i){
         for(uint8_t bit = 0; bit < 8; ++bit){
+            uint8_t page, col;
+            get_tile(page,col, bit, i);
             if(board[i] & (1 << bit)){
-                uint8_t page = (i * 8 * TILE_SIZE + bit * TILE_SIZE)/(BOARD_WIDTH * TILE_SIZE);
-                uint8_t col =  (i * 8 * TILE_SIZE + bit * TILE_SIZE)%(BOARD_WIDTH * TILE_SIZE);
+                
                 sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, wall); 
 
             }
