@@ -1,0 +1,10 @@
+#ifndef MONSTERS_H
+#define MONSTERS_H
+
+#include <stdint.h>
+
+
+static const __flash uint8_t wall[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+ 
+
+#endif

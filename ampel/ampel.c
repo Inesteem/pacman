@@ -14,6 +14,7 @@ static volatile uint8_t event = 0;
 static volatile uint8_t zaehler = 0;
 static STATE state = START;
 static ALARM *alrm;    
+static uint8_t wait = 0; 
 
 
 void init(){
