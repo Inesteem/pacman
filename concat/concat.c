@@ -75,6 +75,21 @@ void init(){
 
     }
 }
+void render_dots(){
+    for(uint8_t i = 0; i < sizeof(board); ++i){
+        for(uint8_t bit = 0; bit < 8; ++bit){
+            uint8_t page, col;
+            get_tile(&page, &col, bit, i);
+                //sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, pacman); 
+            if(dots[i] & (1 << bit)){
+                sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, dot); 
+            }
+        }
+
+    }
+}
+
+
 
 void set_speed(){
 
@@ -197,7 +212,8 @@ void update_board(void){
             }
         //move
         case 2:
-            if(state == PLAY){
+           render_dots(); 
+           if(state == PLAY){
                 render_tile(&player_pos, 0);
                 if(next_pos(1, &player_pos)){
                     sb_7seg_showString("UB");
