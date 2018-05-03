@@ -16,13 +16,15 @@ typedef void(* alarmcallback_t )(void);
 //0 = RIGHT, 1 = DOWN, 2 = LEFT, 3 UP
 
 static volatile uint8_t event = 0;
-float speed = MIN_SPEED;
+float pacman_speed = MIN_SPEED;
+float ghost_speed = MIN_SPEED;
 position player_pos;
+position ghost_pos;
 static volatile STATE state = START;
 uint8_t points = 0;
 
 
-void render_tile(position *pos, const __flash char *bm);
+void render_tile(position *pos, const __flash char *bm, uint8_t pacman);
 void calc_bitmap(const __flash char *bm, uint8_t *display_bm, uint8_t orient);
 
 void demask_buttons(){
@@ -56,13 +58,13 @@ void init(){
         for(uint8_t bit = 0; bit < 8; ++bit){
             uint8_t page, col;
             get_tile(&page, &col, bit, i);
-            if(i + bit == POS_PACMAN){
-                player_pos.px = ((i + bit) * 8) % 128; 
-                player_pos.py = ((i + bit) * 8) / 128; 
+            if(i*8 + bit == POS_PACMAN){
+                player_pos.px = (i * 64 + bit * 8) % 128; 
+                player_pos.py = (i * 64 + bit * 8) / 128 * 8; 
                 player_pos.next_dir = 0;
-                player_pos.dir = 0;
+                player_pos.dir = RIGHT;
                 player_pos.move = 0; 
-                render_tile(&player_pos, pacman_bm);
+                render_tile(&player_pos, pacman_bm, 1);
                 erase_dot(player_pos.px, player_pos.py);
                 //sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, pacman); 
             } else if(board[i] & (1 << bit)){
@@ -71,25 +73,19 @@ void init(){
                 sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, dot); 
                 ++points;
             }
-        }
+            if(i*8 + bit == POS_GHOST){
+                ghost_pos.px = (i * 64 + bit * 8) % 128; 
+                ghost_pos.py = (i * 64 + bit * 8) / 128 * 8; 
+                ghost_pos.next_dir = 0;
+                ghost_pos.dir = LEFT;
+                ghost_pos.move = 0; 
+                render_tile(&ghost_pos, ghost_bm, 0);
 
-    }
-}
-void render_dots(){
-    for(uint8_t i = 0; i < sizeof(board); ++i){
-        for(uint8_t bit = 0; bit < 8; ++bit){
-            uint8_t page, col;
-            get_tile(&page, &col, bit, i);
-                //sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, pacman); 
-            if(dots[i] & (1 << bit)){
-                sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, dot); 
             }
         }
 
     }
 }
-
-
 
 void set_speed(){
 
@@ -97,7 +93,8 @@ void set_speed(){
      int16_t poti = sb_adc_read(POTI);
  
      float bn = 1.0 - (float)(poti)/(float)(MAX_DEV_VAL);
-     speed = MAX_SPEED + (MIN_SPEED - MAX_SPEED) * bn;
+     pacman_speed = MAX_SPEED + (MIN_SPEED - MAX_SPEED) * bn;
+     ghost_speed = MAX_SPEED + 100 + (MIN_SPEED - MAX_SPEED) * bn;
 }
 
 ISR(ADC_vect){
@@ -125,6 +122,10 @@ ISR(INT1_vect) {
     }
     player_pos.next_dir -= 1;
     if(player_pos.next_dir < 0) player_pos.next_dir += 4;
+}
+
+void actualize_ghost_pos(void){
+    event = 4;
 }
 
 
@@ -165,10 +166,11 @@ uint8_t next_pos_free(position *pos){
     
 }
 
-void render_tile(position *pos, const __flash char *bm){
+void render_tile(position *pos, const __flash char *bm, uint8_t pacman){
 
    uint8_t tile[TILE_SIZE];
-   calc_bitmap(bm, tile, pos->dir); 
+   if(pacman == 1) calc_bitmap(bm, tile, pos->dir); 
+   else calc_bitmap(bm, tile, RIGHT); 
 
     uint8_t page_start = (pos->py) % 8;
     if(page_start){
@@ -212,14 +214,13 @@ void update_board(void){
             }
         //move
         case 2:
-           render_dots(); 
            if(state == PLAY){
-                render_tile(&player_pos, 0);
+                render_tile(&player_pos, 0, 1);
                 if(next_pos(1, &player_pos)){
                     sb_7seg_showString("UB");
                     while(1);
                 }
-               render_tile(&player_pos, pacman_bm);
+               render_tile(&player_pos, pacman_bm,1);
             }
     //        get_tile(&page, &col, bit, i);
               state = PLAY;         
@@ -230,18 +231,25 @@ void update_board(void){
                     player_pos.dir = player_pos.next_dir;
                     //print_dir_od();
                     if(next_pos_free(&player_pos)){
-                        player_pos.move = (ALARM *)sb_timer_setAlarm((alarmcallback_t) actualize_player_pos, 1000.0 * (speed/(float)TILE_SIZE), 0);
+                        player_pos.move = (ALARM *)sb_timer_setAlarm((alarmcallback_t) actualize_player_pos, 1000.0 * (pacman_speed/(float)TILE_SIZE), 0);
                     } else { 
                         state = HALT;
-                        render_tile(&player_pos, pacman_bm);
+                        render_tile(&player_pos, pacman_bm,1);
                         //sb_7seg_showString("ha");
                     }
 
 
               } else { 
-                     player_pos.move = (ALARM *) sb_timer_setAlarm((alarmcallback_t) actualize_player_pos, 1000.0 * (speed/(float)TILE_SIZE), 0);
+                     player_pos.move = (ALARM *) sb_timer_setAlarm((alarmcallback_t) actualize_player_pos, 1000.0 * (pacman_speed/(float)TILE_SIZE), 0);
               }
 
+                //GHOST
+
+                render_tile(&ghost_pos, 0, 1);
+                render_tile(&ghost_pos, ghost_bm, 1);
+              if( !(ghost_pos.px % 8) && !(ghost_pos.py % 8)){
+//TODO:::::
+}
 
               break;
 
