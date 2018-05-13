@@ -11,6 +11,26 @@
 #define LEFT 2
 #define UP 3
 
+#define EVENT_CHANGE_DIR    1
+#define EVENT_ACT_P_POS     2
+#define EVENT_ACT_G_POS     4
+#define EVENT_WAIT          5
+
+
+
+typedef enum { 
+        NORMAL,
+        ROTATE_1,
+        ROTATE_2,
+        ROTATE_3, 
+        MIRROR_V,
+        MIRROR_H
+    } BIAS;
+
+
+
+
+
 typedef enum { 
         START,
         HALT, 
@@ -82,16 +102,35 @@ static const __flash char pacman_bm[] =
    "01111110"
    "00111100";
 
-static const __flash char ghost_bm[] = 
+static const __flash char ghost_bm_1[] = 
    "00111100"
    "01111110"
-   "11101011"
+   "11101101"
    "11001001"
    "11111111"
    "11011101"
    "11001101"
    "10001001";
 
+static const __flash char ghost_bm_left[] = 
+   "00111100"
+   "01111110"
+   "10110111"
+   "10010011"
+   "11111111"
+   "10111011"
+   "10110011"
+   "10010001";
 
 
+
+
+  
+void render_tile(position *pos, uint8_t *bm);
+void render_ghost();
+void render_pacman();
+void calc_bitmap(const __flash char *bm, uint8_t *display_bm, uint8_t orient);
+void set_speed();
+void invoke_ghost();
+void calc_next_ghost_dir();
 #endif
