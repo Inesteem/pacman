@@ -278,11 +278,27 @@ uint8_t next_pos_free(position *pos){
 
 void render_pacman(){
     uint8_t tile[TILE_SIZE];
+
+    uint8_t pos_lag = (player_pos.px % 8) + (layer_pos.py % 8);
+    uint8_t bias;
+ 
     switch(player_pos.dir){
-        case DOWN: calc_bitmap(pacman_bm, tile, ROTATE_1); break;
-        case LEFT: calc_bitmap(pacman_bm, tile, ROTATE_2); break;
-        case UP: calc_bitmap(pacman_bm, tile, ROTATE_3); break;
-        default:  calc_bitmap(pacman_bm, tile, NORMAL);
+        case DOWN: bias = ROTATE_1; break;
+        case LEFT: bias = ROTATE_2; break;
+        case UP:   bias = ROTATE_3; break;
+        default:   bias = NORMAL;
+    }
+   
+
+    switch(pos_lag){
+        case 1:
+        case 6: calc_bitmap(pacman_bm_2, tile, bias); break;
+        case 2:
+        case 5: calc_bitmap(pacman_bm_3, tile, bias); break;
+        case 3:
+        case 4: calc_bitmap(pacman_bm_4, tile, bias); break;
+        default;  calc_bitmap(pacman_bm_1, tile, bias); 
+
     }
     render_tile(&player_pos, tile);
 }

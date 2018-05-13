@@ -91,8 +91,18 @@ static const __flash uint8_t dot_filled[] = {
 //    0x3C, 0x7E, 0xFF, 0xFF, 
 //    0xFF, 0xFF, 0x76, 0x34};
 
+static const __flash char pacman_bm_1[] = 
+   "00111100"
+   "01111110"
+   "11111111"
+   "11111111"
+   "11111111"
+   "11111111"
+   "01111110"
+   "00111100";
 
-static const __flash char pacman_bm[] = 
+
+static const __flash char pacman_bm_2[] = 
    "00111100"
    "01111110"
    "11111111"
@@ -101,6 +111,32 @@ static const __flash char pacman_bm[] =
    "11111111"
    "01111110"
    "00111100";
+
+
+
+static const __flash char pacman_bm_3[] = 
+   "00111100"
+   "01111110"
+   "11100000"
+   "11000000"
+   "11100000"
+   "11111111"
+   "01111110"
+   "00111100";
+
+
+static const __flash char pacman_bm_4[] = 
+   "00111100"
+   "01111111"
+   "11110000"
+   "11000000"
+   "11100000"
+   "11110000"
+   "01111111"
+   "00111100";
+
+
+
 
 static const __flash char ghost_bm_1[] = 
    "00111100"
