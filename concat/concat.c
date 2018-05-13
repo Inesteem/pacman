@@ -206,7 +206,6 @@ ISR(ADC_vect){
 }
 
 ISR(INT0_vect) {
-    sb_led_toggle(GREEN0); 
     event = EVENT_CHANGE_DIR;
     if(state == START){
         state = HALT;
@@ -218,7 +217,6 @@ ISR(INT0_vect) {
 }
 
 ISR(INT1_vect) { 
-    sb_led_toggle(GREEN1); 
     event = EVENT_CHANGE_DIR;
     if(state == START){
         state = HALT;
@@ -367,7 +365,6 @@ void calc_next_ghost_dir(){
         if(pos_free(&ghost_pos)){
             uint16_t tmp = distance_ghost_pacman();
             if(tmp < distance){
-                sb_led_toggle(YELLOW1);
                 distance = tmp;
                 best_dir = dir;
             } 
@@ -395,7 +392,6 @@ void update_board(void){
             }
         //move
         case EVENT_ACT_P_POS:
-           sb_led_off(RED0);
 
            if(state == PLAY){
                clear_pacman_pos();
