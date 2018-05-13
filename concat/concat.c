@@ -290,6 +290,8 @@ void render_ghost(){
     uint8_t tile[TILE_SIZE];
     switch(ghost_pos.dir){
         case LEFT: calc_bitmap(ghost_bm_1, tile, MIRROR_V); break; 
+        case UP: calc_bitmap(ghost_bm_up, tile, NORMAL); break; 
+        case DOWN: calc_bitmap(ghost_bm_down, tile, NORMAL); break; 
         default: calc_bitmap(ghost_bm_1, tile, NORMAL); 
     }
     render_tile(&ghost_pos, tile);
@@ -515,6 +517,26 @@ void show_win(void){
 
 }
 
+void show_loose(void){
+    uint8_t set_leds = 0;
+    uint16_t time = 500;
+    sb_led_setMask(set_leds);
+    const char loser[] = "LOSER";
+    sb_display_fillScreen(NULL); // Clear display
+    for(uint8_t i = 0; i < 20; ++i){
+        sb_led_toggle(RED0);
+        sb_led_toggle(RED1);
+        sb_led_toggle(YELLOW0);
+        sb_led_toggle(YELLOW1);
+        if(!(i % 4)  || !((i+1)%4)) sb_display_fillScreen(NULL); // Clear display
+        else sb_display_showStringWide(3,128/2-20,loser);
+        wait_time(time);
+
+    }
+
+}
+
+
 
 void main(void){
     sei();
@@ -545,7 +567,12 @@ void main(void){
         sei();
         //sb_7seg_showNumber(event);
         update_board();
-        if(!dots_left || distance_ghost_pacman() < DEADLY_DISTANCE){
+        if(distance_ghost_pacman() < DEADLY_DISTANCE){
+            deaktivate_timers();
+            show_loose();
+            init();
+        
+        } else if(!dots_left ){
             deaktivate_timers();
             show_win();
             init();
