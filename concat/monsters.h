@@ -3,13 +3,11 @@
 
 #include <stdint.h>
 
-#define MIN_SPEED 1.0
-#define MAX_SPEED 0.1
 #define MAX_DEV_VAL 0x3FF
-#define RIGHT 0
-#define DOWN 1
-#define LEFT 2
-#define UP 3
+#define MAX_SPEED 0x50 //small values => fewer overflows from timer needed to actualize the position
+#define MIN_SPEED 0x300
+
+
 
 #define EVENT_CHANGE_DIR    1
 #define EVENT_ACT_P_POS     2
@@ -17,36 +15,36 @@
 #define EVENT_WAIT          5
 
 
-
-typedef enum { 
-        NORMAL,
-        ROTATE_1,
-        ROTATE_2,
-        ROTATE_3, 
-        MIRROR_V,
-        MIRROR_H
-    } BIAS;
-
-
-
+typedef enum {
+    RIGHT,
+    DOWN,
+    LEFT,
+    UP
+} DIRE;
 
 
 typedef enum { 
-        START,
-        HALT, 
-        PLAY,
-        END
-    } STATE;
+    NORMAL = 0,
+    ROTATE_1 = 1,
+    ROTATE_2 = 2,
+    ROTATE_3 = 4, 
+    MIRROR_V = 8,
+    MIRROR_H = 16
+} BIAS;
 
-
-
+typedef enum { 
+    START,
+    HALT, 
+    PLAY,
+    END
+} STATE;
 
 typedef struct {
     int8_t dir;
     int8_t next_dir;
-    uint8_t px; 
-    uint8_t py;
-    void *move;
+    uint8_t px; //range 128 
+    uint8_t py; //range 64
+    uint8_t dead;
 } position;
 
 inline void get_tile_from_pos(uint8_t *page, uint8_t *col, position *pos){
@@ -93,10 +91,10 @@ static const __flash uint8_t dot_filled[] = {
 
 static const __flash char pacman_bm_1[] = 
    "00111100"
-   "01111110"
-   "11111111"
-   "11111111"
-   "11111111"
+   "01110110"
+   "11110011"
+   "11011111"
+   "11100000"
    "11111111"
    "01111110"
    "00111100";
@@ -104,10 +102,10 @@ static const __flash char pacman_bm_1[] =
 
 static const __flash char pacman_bm_2[] = 
    "00111100"
-   "01111110"
+   "01100110"
    "11111111"
-   "11000000"
-   "11100000"
+   "11010101"
+   "11101010"
    "11111111"
    "01111110"
    "00111100";
@@ -116,11 +114,11 @@ static const __flash char pacman_bm_2[] =
 
 static const __flash char pacman_bm_3[] = 
    "00111100"
-   "01111110"
-   "11100000"
+   "01101110"
+   "11110101"
    "11000000"
    "11100000"
-   "11111111"
+   "11110101"
    "01111110"
    "00111100";
 
@@ -128,7 +126,7 @@ static const __flash char pacman_bm_3[] =
 static const __flash char pacman_bm_4[] = 
    "00111100"
    "01111111"
-   "11110000"
+   "11110101"
    "11000000"
    "11100000"
    "11110000"
@@ -169,10 +167,6 @@ static const __flash char ghost_bm_down[] =
    "10011011"
    "10010001";
 
-
-
-
-  
 void render_tile(position *pos, uint8_t *bm);
 void render_ghost();
 void render_pacman();
@@ -180,4 +174,7 @@ void calc_bitmap(const __flash char *bm, uint8_t *display_bm, uint8_t orient);
 void set_speed();
 void invoke_ghost();
 void calc_next_ghost_dir();
+void timer0_init();
+void wait_time(uint16_t time);
+
 #endif

@@ -1,7 +1,7 @@
 #ifndef CONCAT_H
 #define CONCAT_H
 
-#include<stdint.h>
+#include <stdint.h>
 
 #define TILE_SIZE 8
 #define BOARD_HEIGHT 8
@@ -9,7 +9,9 @@
 #define POS_PACMAN 0
 #define POS_GHOST 127
 
-
+#define false 0
+#define true 1
+#define DEADLY_DISTANCE (TILE_SIZE * TILE_SIZE / 2)
 
 
 static const __flash uint8_t board[] = {
@@ -21,6 +23,17 @@ static const __flash uint8_t board[] = {
 	0xbe, 0x28, 
 	0x80, 0x8e, 
 	0x2a, 0x20};
+
+static const __flash uint8_t special_dots[] = {
+	0x00, 0x01, 
+	0x00, 0x00, 
+	0x00, 0x00, 
+	0x00, 0x10, 
+	0x00, 0x00, 
+	0x00, 0x00, 
+	0x01, 0x00, 
+	0x00, 0x10
+};
 
 uint8_t dots[] = {
 	0x7f, 0x7d, 
@@ -56,5 +69,15 @@ inline uint8_t erase_dot(uint8_t px, uint8_t py){
     dots[idx/64] &= ~(1 << bit);
     return ret;
 }
+
+uint8_t is_special_dot(uint8_t px, uint8_t py){
+    uint16_t idx = ((py * 128)/8  + px);
+    uint16_t bit = (uint16_t)((uint16_t)(idx/64)  * 64) ;
+    bit = (uint16_t) (idx - bit)/8;   
+    uint8_t ret = 0;
+    if(special_dots[idx/64] & (1 << bit)) return true;
+    return false;
+}
+
 
 #endif

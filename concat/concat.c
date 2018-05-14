@@ -5,105 +5,109 @@
 #include <display.h>
 #include <7seg.h>
 #include <timer.h>
+#include <button.h>
 #include <led.h>
 #include <adc.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
-#include "sqrt.h"
-
-#define false 0
-#define true 1
-#define DEADLY_DISTANCE (TILE_SIZE * TILE_SIZE / 2)
 
 typedef void(* alarmcallback_t )(void);
 
+//needs to be volatile since it is set in multiple ISRs
+static volatile uint8_t event;
+static volatile STATE state;
 
-static volatile uint8_t event = 0;
 uint16_t pacman_speed;
 uint16_t ghost_speed;
+uint8_t ghost_vulnerable;
+
 position player_pos;
 position ghost_pos;
-static volatile STATE state;
-uint8_t points = 0;
-uint8_t dots_left = 0;
+
+uint8_t points;
+uint8_t dots_left;
 
 // global variable to count the number of overflows
-volatile uint16_t ghost_of = 0;
-volatile uint16_t pacmn_of = 0;
+uint16_t ghost_of;
+uint16_t pacmn_of;
+
+// since button1 is not debounced in hw the simples solution is to use the spiclib  functions
+BUTTONSTATE button1_last_state;
+BUTTONSTATE button0_last_state;
+
+void be_vulnerable(){
+    if(ghost_pos.dead) return;
+    sb_led_setMask(ghost_vulnerable);
+    if(ghost_vulnerable){ 
+        ghost_vulnerable = ghost_vulnerable >> 1;
+        sb_timer_setAlarm((alarmcallback_t) be_vulnerable, 800 , 0);
+    }
+}
+
 
 // TIMER0 overflow interrupt service routine
 // called whenever TCNT0 overflows
 ISR(TIMER0_OVF_vect) {
-   // keep a track of number of overflows
+     BUTTONSTATE bs = sb_button_getState(BUTTON1);
+     if(button1_last_state == PRESSED){
+        button1_last_state = bs;
+     } else if(button1_last_state != PRESSED && bs == PRESSED){      
+         button1_last_state = PRESSED; 
+         event = EVENT_CHANGE_DIR;
+         if(state == START){
+             state = HALT;
+             return;
+         }
+         player_pos.next_dir -= 1;
+         if(player_pos.next_dir < 0) player_pos.next_dir += 4;
+         return;
+    }
+    bs = sb_button_getState(BUTTON0);
+    if(button0_last_state == PRESSED){
+        button0_last_state = bs;
+    } else if(button0_last_state != PRESSED && bs == PRESSED){      
+         button0_last_state = PRESSED; 
+        event = EVENT_CHANGE_DIR;
+        if(state == START){
+            state = HALT;
+            return;
+        }
+        player_pos.next_dir += 1;
+        player_pos.next_dir %= 4;
+        return;
+    }
+
+    if(state == START) return;
 
      // keep a track of number of overflows
-     ++ghost_of;
      ++pacmn_of;
-             TCNT0 = 0;            // reset counter
-         // check if the timer count reaches 53
-         if (pacmn_of >= pacman_speed){
-             TCNT0 = 0;            // reset counter
-             pacmn_of = 0;     // reset overflow counter
-             event = EVENT_ACT_P_POS;
-         }
- 
-         else if (ghost_of >= ghost_speed){
-             TCNT0 = 0;            // reset counter
-             ghost_of = 0;     // reset overflow counter
-             event = EVENT_ACT_G_POS;
-         }
-   
-}
+     ++ghost_of;
 
-//ISR(TIMER1_OVF_vect) {
-//    // keep a track of number of overflows
-//    pacman_speed = 1;
-//    ghost_speed = 1;  
-//    ++ghost_of;
-//    ++pacmn_of;
-//    sb_led_toggle(YELLOW0);
-//            TCNT0 = 0;            // reset counter
-//        // check if the timer count reaches 53
-//        if (pacmn_of >= pacman_speed){
-//            sb_led_toggle(BLUE0);
-//            TCNT0 = 0;            // reset counter
-//            pacmn_of = 0;     // reset overflow counter
-//            event = EVENT_ACT_P_POS;
-//        }
-//
-//        else if (ghost_of >= ghost_speed){
-//            sb_led_toggle(BLUE1);
-//            TCNT0 = 0;            // reset counter
-//            ghost_of = 0;     // reset overflow counter
-//            event = EVENT_ACT_G_POS;
-//        }
-//        
-//}
+     if (pacmn_of >= pacman_speed){
+         TCNT0 = 0;            // reset counter
+         pacmn_of = 0;     // reset overflow counter
+         event = EVENT_ACT_P_POS;
+         return;
+     }
+
+     if(ghost_pos.dead) return; 
+     if (ghost_of >= ghost_speed){
+         TCNT0 = 0;            // reset counter
+         ghost_of = 0;     // reset overflow counter
+         event = EVENT_ACT_G_POS;
+     }
+
+}
 
 void deaktivate_timers(){
-
     TIMSK0 = 0;
-
-}
-
-void demask_buttons(){
-
-    EIMSK |= (1 << INT0); /* demaskiere Interrupt 0 */
-    EIMSK |= (1 << INT1); /* demaskiere Interrupt 1 */
-
-}
-void mask_buttons(){
-
-    EIMSK &= ~(1 << INT0); /* maskiere Interrupt 0 */
-    EIMSK &= ~(1 << INT1); /* maskiere Interrupt 1 */
-
 }
 
 void timer0_init(){
     //TIMER0
-   // set up timer with no prescaling
-//    TCCR0 |= (1 << CS00);
+    // set up timer with no prescaling
+    // TCCR0B |= (1 << CS00);
  
    // set up timer with prescaler = 1024
     //TCCR0B |= (1 << CS02)|(1 << CS00);
@@ -117,39 +121,19 @@ void timer0_init(){
 }
 
 
-//void timer1_init(){
-//   // set up timer with prescaler = 1024
-//    TCCR1B |= (1 << CS02)|(1 << CS00);
-//
-//    // initialize counter
-//    TCNT1 = 0;
-//
-//    // enable overflow interrupt
-//    TIMSK1 |= (1 << TOIE1); 
-//}
-
-
-
 void init(){
+    button1_last_state = UNKNOWN;
+    button0_last_state = UNKNOWN;
+    dots_left = 0;
+    ghost_of = 0;
+    pacmn_of = 0;
 
-
-
-    //Configuration auf fallende Flanke
-    //Button 0
-    DDRD  &= ~(1<< PD2); /* PD2 als Eingang nutzen... */
-    PORTD |= (1 << PD2); /* pull-up-Widerstand aktivieren */
-    EICRA &= ~(1<< ISC00); /* ISC00 löschen */
-    EICRA |= (1 << ISC01); /* ISC10 setzen */
-    EIMSK |= (1 << INT0); /* demaskiere Interrupt 0 */
-    //Button 1
-    DDRD  &= ~(1<< PD3); /* PD2 als Eingang nutzen... */
-    PORTD |= (1 << PD3); /* pull-up-Widerstand aktivieren */
-    EICRA &= ~(1<< ISC10); /* ISC10 löschen */
-    EICRA |= (1 << ISC11); /* ISC11 setzen */
-    EIMSK |= (1 << INT1); /* demaskiere Interrupt 1 */    
-
+    event = 0;
+    ghost_vulnerable = 0;
     state = START;
     dots_left = 0;
+    points = 0;
+    sb_7seg_showNumber(points);
     set_speed();
     sb_display_fillScreen(NULL); // Clear display
     for(uint8_t i = 0; i < sizeof(board); ++i){
@@ -161,7 +145,11 @@ void init(){
                 sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, wall); 
             } else {
                 dots[i] |= (1 << bit);
-                sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, dot); 
+                if(special_dots[i] & (1 << bit) ) {
+                    sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, dot_filled); 
+                } else {
+                    sb_display_drawBitmapFromFlash(page, col, 1, TILE_SIZE, dot); 
+                }
                 ++dots_left;
             }
 
@@ -170,7 +158,7 @@ void init(){
                 player_pos.py = (i * 64 + bit * 8) / 128 * 8; 
                 player_pos.next_dir = 0;
                 player_pos.dir = RIGHT;
-                player_pos.move = 0; 
+                player_pos.dead = false;
                 render_pacman();
                 erase_dot(player_pos.px, player_pos.py);
                 --dots_left;
@@ -180,7 +168,7 @@ void init(){
                 ghost_pos.py = (i * 64 + bit * 8) / 128 * 8; 
                 ghost_pos.next_dir = 0;
                 ghost_pos.dir = LEFT;
-                ghost_pos.move = 0; 
+                ghost_pos.dead = false;
                 render_ghost();
                 calc_next_ghost_dir();
             }
@@ -191,13 +179,11 @@ void init(){
 
 void set_speed(){
 
- 
      int16_t poti = sb_adc_read(POTI);
- 
      float bn = 1.0 - (float)(poti)/(float)(MAX_DEV_VAL);
-     //pacman_speed = MAX_SPEED + (MIN_SPEED - MAX_SPEED) * bn;
-     pacman_speed = (MAX_DEV_VAL - poti)*2;
-     ghost_speed = pacman_speed * 1.3;
+
+     pacman_speed = MAX_SPEED + (MIN_SPEED - MAX_SPEED) * bn;
+     ghost_speed = pacman_speed * 1.2;
 }
 
 ISR(ADC_vect){
@@ -205,31 +191,7 @@ ISR(ADC_vect){
     set_speed();
 }
 
-ISR(INT0_vect) {
-    event = EVENT_CHANGE_DIR;
-    if(state == START){
-        state = HALT;
-        timer0_init();
-        return;
-    }
-    player_pos.next_dir += 1;
-    player_pos.next_dir %= 4;
-}
-
-ISR(INT1_vect) { 
-    event = EVENT_CHANGE_DIR;
-    if(state == START){
-        state = HALT;
-        invoke_ghost();
-        return;
-    }
-    player_pos.next_dir -= 1;
-    if(player_pos.next_dir < 0) player_pos.next_dir += 4;
-}
-
-void actualize_player_pos(void){
-    event = EVENT_ACT_P_POS;
-}
+// BOARD ACCESS: HELPER FUNCTIONS
 
 uint8_t next_pos_in_board(position *pos){
     switch(pos->dir){
@@ -274,6 +236,8 @@ uint8_t next_pos_free(position *pos){
     
 }
 
+// RENDER FUNCTIONS
+
 void render_pacman(){
     uint8_t tile[TILE_SIZE];
 
@@ -282,7 +246,8 @@ void render_pacman(){
  
     switch(player_pos.dir){
         case DOWN: bias = ROTATE_1; break;
-        case LEFT: bias = ROTATE_2; break;
+        //case LEFT: bias = ROTATE_2; break;
+        case LEFT: bias = MIRROR_V; break;
         case UP:   bias = ROTATE_3; break;
         default:   bias = NORMAL;
     }
@@ -344,6 +309,7 @@ void render_tile(position *pos, uint8_t *tile){
 
 }
 
+// ACTUALIZE GHOST DIR
 
 static inline uint16_t euclidian_distance_sqr(uint8_t px1, uint8_t py1, uint8_t px2, uint8_t py2){
     uint16_t dx = px1 - px2;
@@ -357,6 +323,7 @@ static inline uint16_t distance_ghost_pacman(){
 
 void calc_next_ghost_dir(){
     uint16_t distance = -1;
+    if(ghost_vulnerable) distance = 0;
     uint8_t best_dir = 0;
     for(int8_t dir = 0; dir < 4; ++dir){
         ghost_pos.dir = dir;
@@ -364,7 +331,10 @@ void calc_next_ghost_dir(){
         next_pos(8, &ghost_pos);
         if(pos_free(&ghost_pos)){
             uint16_t tmp = distance_ghost_pacman();
-            if(tmp < distance){
+            if(!ghost_vulnerable && tmp < distance){
+                distance = tmp;
+                best_dir = dir;
+            } else if(ghost_vulnerable && tmp > distance){
                 distance = tmp;
                 best_dir = dir;
             } 
@@ -374,63 +344,61 @@ void calc_next_ghost_dir(){
     ghost_pos.dir = best_dir;
 }
 
-void invoke_ghost(){
-    //timer0_init();
-
-}
-
-
 void update_board(void){
     set_speed();
-    mask_buttons();
+
     uint8_t page, col;
     switch(event){
-        //changed dir
+
         case EVENT_CHANGE_DIR: 
             if(state != HALT){
                 break; 
             }
-        //move
+
         case EVENT_ACT_P_POS:
 
            if(state == PLAY){
                clear_pacman_pos();
-                if(next_pos(1, &player_pos)){
+               if(next_pos(1, &player_pos)){
                     sb_7seg_showString("PA");
                     while(1);
                 }
                 render_pacman();
            } 
- 
-              state = PLAY;         
-                //new tile reached
-              if( !(player_pos.px % 8) && !(player_pos.py % 8)){
-                    //eat dot
-                    uint8_t dot= erase_dot(player_pos.px, player_pos.py);
+
+          state = PLAY;         
+          //new tile reached
+          if( !(player_pos.px % 8) && !(player_pos.py % 8)){
+                //eat dot
+                uint8_t dot= erase_dot(player_pos.px, player_pos.py);
+                if(dot){
                     points += dot;
                     dots_left -= dot;
-                    sb_7seg_showNumber(points);
-                    //set next dir
-                    player_pos.dir = player_pos.next_dir;
-
-                    if(next_pos_free(&player_pos)){
-                        //player_pos.move = (ALARM *)sb_timer_setAlarm((alarmcallback_t) actualize_player_pos, 1000.0 * (pacman_speed/(float)TILE_SIZE), 0);
-                    } else { 
-                        sb_led_on(RED0);
-                        state = HALT;
-                        render_pacman();
+                    if( is_special_dot(player_pos.px, player_pos.py) ){
+                        ghost_vulnerable = 0xFF;
+                        be_vulnerable();
                     }
+    
+                }
+                sb_7seg_showNumber(points);
+                //set next dir
+                player_pos.dir = player_pos.next_dir;
 
-              } else { 
-                     //player_pos.move = (ALARM *) sb_timer_setAlarm((alarmcallback_t) actualize_player_pos, 1000.0 * (pacman_speed/(float)TILE_SIZE), 0);
-              }
-            break;
+                if(next_pos_free(&player_pos)){
+                } else { 
+                    //sb_led_on(RED0);
+                    state = HALT;
+                    render_pacman();
+                }
+
+          }  
+        break;
 
         case EVENT_ACT_G_POS: 
             clear_ghost_pos();
             if(next_pos(1, &ghost_pos)){
-                    sb_7seg_showString("GO");
-                    while(1);
+                sb_7seg_showString("GO");
+                while(1);
             }
             render_ghost();
 
@@ -446,11 +414,11 @@ void update_board(void){
 
     };
 
-    demask_buttons();
+   // demask_buttons();
 }
 // active-low: low-Pegel (logisch 0; GND am Pin) =>  LED leuchtet
 
-void calc_bitmap(const __flash char *bm, uint8_t *display_bm, BIAS orient){
+void calc_bitmap(const __flash char *bm, uint8_t *display_bm, uint8_t orient){
     for(uint8_t i = 0; i < TILE_SIZE; ++i) display_bm[i] = 0;
     
 
@@ -480,6 +448,8 @@ void calc_bitmap(const __flash char *bm, uint8_t *display_bm, BIAS orient){
 
 
 }
+
+//ON WIN / ON LOOSE
 
 void wait(){
     event = EVENT_WAIT;
@@ -565,11 +535,11 @@ void main(void){
 
     init();
 
-    sb_led_on(RED0);
     set_sleep_mode(SLEEP_MODE_IDLE); /* Idle-Modus verwenden */
     sleep_enable();
 
     while(1){
+        timer0_init();
         cli();
         while( !event ) {
             sei();
@@ -577,13 +547,19 @@ void main(void){
             cli();
         }
         sei();
-        //sb_7seg_showNumber(event);
         update_board();
-        if(distance_ghost_pacman() < DEADLY_DISTANCE){
-            deaktivate_timers();
-            show_loose();
-            init();
-        
+        if(!ghost_pos.dead && distance_ghost_pacman() < DEADLY_DISTANCE){
+            if(!ghost_vulnerable){
+                deaktivate_timers();
+                show_loose();
+                init();
+            } else {
+                ghost_pos.dead = true;
+                clear_ghost_pos();
+                render_pacman();
+                points += 20;
+                sb_led_setMask(0);
+            }
         } else if(!dots_left ){
             deaktivate_timers();
             show_win();
@@ -592,10 +568,6 @@ void main(void){
         event = 0;
     }
     sleep_disable();
-
-
-
-
 
     while(1); // Stop loop
 }    
